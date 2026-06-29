@@ -1,0 +1,10 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editör / araç durumu
+.claude/
+*.log
+
+# Bağımlılıklar (gerekirse)
+node_modules/

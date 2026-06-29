@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d0e" />
+  <title>ARNOULD · Antrenman Takvimi</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ARNOULD" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Dekoratif arka plan: kulvar çizgileri -->
+  <div class="bg-lanes" aria-hidden="true"></div>
+
+  <!-- ÜST BAR -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-bolt" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor"/></svg>
+      </span>
+      <span class="brand-name">ARNOULD</span>
+      <span class="brand-tag">ANTRENMAN TAKVİMİ</span>
+    </div>
+
+    <nav class="navctrl" aria-label="Takvim navigasyonu">
+      <button class="icon-btn" id="prevBtn" aria-label="Önceki" title="Önceki">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="today-btn" id="todayBtn">Bugün</button>
+      <button class="icon-btn" id="nextBtn" aria-label="Sonraki" title="Sonraki">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <h1 class="period-label" id="periodLabel">—</h1>
+    </nav>
+
+    <div class="topbar-right">
+      <div class="view-toggle" role="tablist" aria-label="Görünüm">
+        <button class="view-opt is-active" id="viewMonth" role="tab" aria-selected="true">Ay</button>
+        <button class="view-opt" id="viewWeek" role="tab" aria-selected="false">Hafta</button>
+      </div>
+      <button class="timer-btn" id="openTimerBtn">
+        <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 13V9M9 2h6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span>Geri Sayım</span>
+      </button>
+      <button class="icon-btn" id="themeBtn" aria-label="Tema değiştir" title="Açık / Koyu mod" aria-pressed="false">
+        <svg class="ic-moon" viewBox="0 0 24 24" width="20" height="20"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/></svg>
+        <svg class="ic-sun" viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></g></svg>
+      </button>
+      <button class="icon-btn" id="menuBtn" aria-label="Menü" title="Yedekle / Ayarlar" aria-haspopup="true" aria-expanded="false" aria-controls="menuPop">
+        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
+      </button>
+      <div class="menu-pop" id="menuPop" hidden>
+        <button data-action="export">Verileri Dışa Aktar (.json)</button>
+        <button data-action="import">Verileri İçe Aktar</button>
+        <button data-action="seed">Örnek Programı Yükle</button>
+        <button data-action="reset" class="danger">Tüm Verileri Sıfırla</button>
+        <input type="file" id="importFile" accept="application/json" hidden />
+      </div>
+    </div>
+  </header>
+
+  <!-- İSTATİSTİK ŞERİDİ -->
+  <section class="stats-strip" id="statsStrip" aria-label="Dönem özeti"></section>
+
+  <!-- TAKVİM -->
+  <main class="board">
+    <div class="weekday-head" id="weekdayHead"></div>
+    <div class="calendar" id="calendar"></div>
+    <div class="weekboard" id="weekboard" hidden></div>
+  </main>
+
+  <!-- GÜN POP-UP -->
+  <div class="overlay" id="dayOverlay" hidden>
+    <div class="modal day-modal" role="dialog" aria-modal="true" aria-labelledby="dayTitle">
+      <div class="modal-accent" aria-hidden="true"></div>
+      <header class="modal-head">
+        <div>
+          <p class="modal-kicker" id="dayKicker">GÜN PROGRAMI</p>
+          <h2 class="modal-title" id="dayTitle">—</h2>
+        </div>
+        <button class="icon-btn close-btn" data-close aria-label="Kapat">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+
+      <div class="day-titlebar">
+        <input type="text" id="dayTitleInput" class="day-title-input" placeholder="Antrenman adı (ör. İtiş Günü)" maxlength="40" />
+        <label class="done-toggle">
+          <input type="checkbox" id="dayDoneInput" />
+          <span class="done-pill"><span class="done-dot"></span> Tamamlandı</span>
+        </label>
+      </div>
+
+      <div class="ex-summary" id="exSummary"></div>
+
+      <div class="ex-list" id="exList"></div>
+
+      <!-- Hareket formu -->
+      <form class="ex-form" id="exForm" hidden>
+        <p class="form-title" id="formTitle">Yeni Hareket</p>
+        <div class="form-grid">
+          <label class="fld fld-wide">
+            <span>Hareket Adı</span>
+            <input type="text" id="fName" required placeholder="ör. Bench Press" maxlength="50" />
+          </label>
+          <label class="fld">
+            <span>Bölge</span>
+            <select id="fRegion"></select>
+          </label>
+          <label class="fld">
+            <span>Set</span>
+            <input type="number" id="fSets" min="1" max="20" value="3" />
+          </label>
+          <label class="fld">
+            <span>Tekrar</span>
+            <input type="text" id="fReps" placeholder="ör. 8-12" maxlength="12" value="10" />
+          </label>
+          <label class="fld">
+            <span>Süre (dk)</span>
+            <input type="number" id="fDur" min="1" max="180" value="10" />
+          </label>
+          <label class="fld fld-wide">
+            <span>Not (opsiyonel)</span>
+            <input type="text" id="fNotes" placeholder="ör. tempo 2-0-1, dropset" maxlength="80" />
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="formCancel">Vazgeç</button>
+          <button type="submit" class="btn solid" id="formSave">Ekle</button>
+        </div>
+      </form>
+
+      <footer class="modal-foot">
+        <button class="btn ghost" id="addExBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+          Hareket Ekle
+        </button>
+        <button class="btn solid" id="startDayTimer">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+          Geri Sayımı Başlat
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- GERİ SAYIM POP-UP -->
+  <div class="overlay" id="timerOverlay" hidden>
+    <div class="modal timer-modal" role="dialog" aria-modal="true" aria-labelledby="timerTitle">
+      <header class="modal-head">
+        <div>
+          <p class="modal-kicker">ZAMANLAYICI</p>
+          <h2 class="modal-title" id="timerTitle">Geri Sayım</h2>
+        </div>
+        <button class="icon-btn close-btn" data-close aria-label="Kapat">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+
+      <div class="timer-tabs" role="tablist">
+        <button class="timer-tab is-active" id="tabCountdown" role="tab" aria-selected="true">Geri Sayım</button>
+        <button class="timer-tab" id="tabStopwatch" role="tab" aria-selected="false">Kronometre</button>
+      </div>
+
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 240 240" aria-hidden="true">
+          <circle class="ring-track" cx="120" cy="120" r="108" />
+          <circle class="ring-prog" id="ringProg" cx="120" cy="120" r="108" />
+        </svg>
+        <div class="ring-center">
+          <div class="timer-display" id="timerDisplay">00:30</div>
+          <div class="timer-state" id="timerState" aria-live="polite">HAZIR</div>
+        </div>
+      </div>
+
+      <div class="presets" id="presets">
+        <button data-sec="30">30 sn</button>
+        <button data-sec="60">1 dk</button>
+        <button data-sec="90">90 sn</button>
+        <button data-sec="120">2 dk</button>
+        <button data-sec="300">5 dk</button>
+      </div>
+
+      <div class="custom-time" id="customTime">
+        <label>Dk <input type="number" id="cdMin" min="0" max="180" value="0" /></label>
+        <label>Sn <input type="number" id="cdSec" min="0" max="59" value="30" /></label>
+        <button class="btn ghost" id="cdSet">Ayarla</button>
+      </div>
+
+      <div class="timer-controls">
+        <button class="btn ghost" id="tReset">Sıfırla</button>
+        <button class="btn solid big" id="tStart">Başlat</button>
+        <button class="btn ghost" id="tAdd">+15 sn</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bildirim -->
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/timer.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- Service Worker kaydı (çevrimdışı / kurulabilir PWA) -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function (err) {
+          console.warn("SW kaydı başarısız:", err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

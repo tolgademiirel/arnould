@@ -1,0 +1,20 @@
+{
+  "name": "ARNOULD · Antrenman Takvimi",
+  "short_name": "ARNOULD",
+  "description": "Spor temalı antrenman takvimi: günlük hareketler, set/tekrar/bölge/süre ve geri sayım aracı.",
+  "lang": "tr",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "/arnould-gym/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b0d0e",
+  "theme_color": "#0b0d0e",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
