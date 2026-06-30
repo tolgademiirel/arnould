@@ -53,9 +53,15 @@ async function signIn() {
     if (isMobileOrStandalone()) await signInWithRedirect(auth, provider);
     else await signInWithPopup(auth, provider);
   } catch (e) {
-    // Popup engellendiyse yönlendirmeye düş
-    try { await signInWithRedirect(auth, provider); }
-    catch (e2) { console.warn("Giriş başarısız:", e2); toast("Giriş yapılamadı"); }
+    var code = (e && e.code) || "";
+    console.error("ARNOULD giriş hatası:", code, e);
+    // YALNIZCA popup kaynaklı sorunlarda yönlendirmeye düş (config/domain
+    // hatalarında redirect denemek anlamsız; gerçek kodu göster).
+    if (/popup|operation-not-supported|cancelled-popup|network-request/i.test(code)) {
+      try { await signInWithRedirect(auth, provider); return; }
+      catch (e2) { console.error("Yönlendirme de başarısız:", e2); code = (e2 && e2.code) || code; }
+    }
+    toast("Giriş yapılamadı: " + (code || "bilinmeyen hata"));
   }
 }
 async function doSignOut() {
@@ -144,8 +150,11 @@ onAuthStateChanged(auth, async function (user) {
   }
 });
 
-// Mobil yönlendirme dönüşü (varsa)
-getRedirectResult(auth).catch(function () {});
+// Mobil yönlendirme dönüşü (varsa) — hata olursa kodu göster
+getRedirectResult(auth).catch(function (e) {
+  console.error("Yönlendirme dönüş hatası:", e && e.code, e);
+  if (e && e.code) toast("Giriş yapılamadı: " + e.code);
+});
 
 /* ---------- Dışa aç ---------- */
 App.Sync = {
