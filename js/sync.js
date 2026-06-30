@@ -10,7 +10,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-  getRedirectResult, signOut, onAuthStateChanged
+  getRedirectResult, signInWithCredential, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot
@@ -24,6 +24,9 @@ const firebaseConfig = {
   messagingSenderId: "889161863929",
   appId: "1:889161863929:web:cb3f4b52ae6c78f0078828",
 };
+
+// Google Identity Services (GIS) için OAuth Web Client ID
+const GIS_CLIENT_ID = "889161863929-9h87mdfeuh11taaju5okeblei7cda513.apps.googleusercontent.com";
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
@@ -121,19 +124,86 @@ function startRealtime() {
   }, function () { /* hata: yoksay */ });
 }
 
+/* ---------- Google Identity Services (GIS) ----------
+   Popup/redirect yerine GIS kullanıyoruz: Google'ın kendi (ilk-taraf)
+   akışı bir ID token döndürür, biz onu signInWithCredential ile Firebase
+   oturumuna çeviririz. Safari/iPhone dahil her tarayıcıda çalışır. */
+var gisInited = false;
+
+function handleCredential(resp) {
+  if (!resp || !resp.credential) return;
+  var cred = GoogleAuthProvider.credential(resp.credential);
+  signInWithCredential(auth, cred).catch(function (e) {
+    console.error("GIS giriş hatası:", e && e.code, e);
+    toast("Giriş yapılamadı: " + ((e && e.code) || "bilinmeyen hata"));
+  });
+}
+
+function initGIS() {
+  if (gisInited) return;
+  if (!(window.google && google.accounts && google.accounts.id)) return; // GIS henüz yüklenmedi
+  google.accounts.id.initialize({
+    client_id: GIS_CLIENT_ID,
+    callback: handleCredential,
+    auto_select: false,
+    cancel_on_tap_outside: true,
+    use_fedcm_for_prompt: true,
+  });
+  gisInited = true;
+  renderButton();
+}
+
+// GIS butonunu menüye çiz (görünür olunca çağrılmalı; gizli kapsayıcıda 0 boyut olur)
+function renderButton() {
+  var el = document.getElementById("gisBtn");
+  if (!el || currentUser) return;
+  if (!gisInited) { initGIS(); return; }
+  el.innerHTML = "";
+  try {
+    google.accounts.id.renderButton(el, {
+      type: "standard", theme: "filled_blue", size: "large",
+      text: "signin_with", shape: "pill", locale: "tr", width: 210,
+    });
+  } catch (e) { console.warn("GIS buton çizilemedi:", e); }
+}
+
+// GIS yüklenene kadar bekle; yüklenmezse popup'a düşen yedek buton göster
+var gisPoll = setInterval(function () {
+  if (window.google && google.accounts && google.accounts.id) {
+    clearInterval(gisPoll); gisPoll = null; initGIS();
+  }
+}, 200);
+setTimeout(function () {
+  if (gisPoll) { clearInterval(gisPoll); gisPoll = null; }
+  if (!gisInited && !currentUser) {
+    // Yedek: GIS gelmedi → klasik popup butonu
+    var el = document.getElementById("gisBtn");
+    if (el && !el.firstChild) {
+      var b = document.createElement("button");
+      b.textContent = "Google ile Giriş Yap";
+      b.className = "gis-fallback";
+      b.onclick = signIn;
+      el.appendChild(b);
+    }
+  }
+}, 6000);
+
 /* ---------- Menü arayüzü ---------- */
 function setUI(user) {
-  var signinBtn = document.getElementById("signinBtn");
+  var wrap = document.getElementById("gisWrap");
   var acct = document.getElementById("syncAccount");
   var emailEl = document.getElementById("syncEmail");
-  if (!signinBtn || !acct) return;
+  if (!wrap || !acct) return;
   if (user) {
-    signinBtn.hidden = true;
+    wrap.hidden = true;
     acct.hidden = false;
     if (emailEl) emailEl.textContent = user.email || user.displayName || "Hesap";
+    var menu = document.getElementById("menuPop");   // giriş sonrası menüyü kapat
+    if (menu) menu.hidden = true;
   } else {
-    signinBtn.hidden = false;
+    wrap.hidden = false;
     acct.hidden = true;
+    renderButton();
   }
 }
 
@@ -163,6 +233,7 @@ App.Sync = {
   signIn: signIn,
   signOut: doSignOut,
   isSignedIn: function () { return !!currentUser; },
+  renderButton: renderButton, // app.js menü açılınca çağırır (görünür çizim için)
 };
 
 // Kaydetme kancası: her gerçek değişiklikte buluta it
