@@ -49,15 +49,17 @@ function isMobileOrStandalone() {
 
 /* ---------- Giriş / çıkış ---------- */
 async function signIn() {
+  // POPUP'ı her platformda öncele: signInWithRedirect, uygulama alan adı
+  // (github.io) ile authDomain (firebaseapp.com) farklı olduğunda mobil
+  // tarayıcılarda çerez/depolama kısıtları yüzünden oturumu kaybediyor.
+  // Popup aynı origin'e postMessage ile döndüğü için çapraz-alana bağımlı değil.
   try {
-    if (isMobileOrStandalone()) await signInWithRedirect(auth, provider);
-    else await signInWithPopup(auth, provider);
+    await signInWithPopup(auth, provider);
   } catch (e) {
     var code = (e && e.code) || "";
     console.error("ARNOULD giriş hatası:", code, e);
-    // YALNIZCA popup kaynaklı sorunlarda yönlendirmeye düş (config/domain
-    // hatalarında redirect denemek anlamsız; gerçek kodu göster).
-    if (/popup|operation-not-supported|cancelled-popup|network-request/i.test(code)) {
+    // Popup engellendi/desteklenmiyor (örn. kurulu PWA standalone) → redirect'e düş
+    if (/popup-blocked|popup-closed|cancelled-popup|operation-not-supported|web-storage-unsupported/i.test(code)) {
       try { await signInWithRedirect(auth, provider); return; }
       catch (e2) { console.error("Yönlendirme de başarısız:", e2); code = (e2 && e2.code) || code; }
     }
