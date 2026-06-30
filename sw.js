@@ -1,11 +1,15 @@
 /* ============================================================
-   sw.js — Service Worker (çevrimdışı destek)
-   - Aynı köken uygulama dosyaları: AĞ-ÖNCE (çevrimiçiyken hep güncel,
-     çevrimdışında önbellekten; HTML isteği için index.html'e düşer)
-   - Çapraz köken (yazı tipleri): bayatla-ve-yenile
-   Sürüm yükseltmek için CACHE adını değiştir (örn. v3).
+   sw.js — Service Worker (çevrimdışı + güvenilir otomatik güncelleme)
+   - Aynı köken uygulama dosyaları: AĞ-ÖNCE, ağ isteği HTTP önbelleğini
+     ATLAR (cache:"reload") → çevrimiçiyken her zaman en güncel bayt.
+   - Çevrimdışında önbellekten; HTML isteği index.html'e düşer.
+   - Çapraz köken: yalnızca fonts/gstatic bayatla-ve-yenile; Firebase/Google
+     API çağrıları SW'ye dokunmaz.
+   - skipWaiting + SKIP_WAITING mesajı + clients.claim ile yeni sürüm anında
+     devreye girer; sayfa tarafı controllerchange'de bir kez yeniden yüklenir.
+   Sürüm yükseltmek için CACHE adını değiştir.
    ============================================================ */
-const CACHE = "arnould-v12";
+const CACHE = "arnould-v13";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,17 +27,25 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    // Tek bir varlık 404 olsa bile kurulum çökmesin (yoksa eski SW'de takılı kalınır)
+    await Promise.allSettled(ASSETS.map((u) => c.add(u)));
+    await self.skipWaiting();
+  })());
+});
+
+// Sayfa "yeni sürümü hemen devreye al" derse
+self.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (e) => {
-  e.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener("fetch", (e) => {
@@ -42,36 +54,28 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
 
   if (url.origin === location.origin) {
-    // Aynı köken (uygulama dosyaları): ağ-önce, çevrimdışında önbellek
-    e.respondWith(
-      fetch(req)
-        .then((net) => {
-          const copy = net.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-          return net;
-        })
-        .catch(() =>
-          caches.match(req).then((hit) =>
-            hit || (req.mode === "navigate" ? caches.match("./index.html") : undefined)
-          )
-        )
-    );
+    // Aynı köken: ağ-önce ama ağ isteği HTTP önbelleğini atlar (bayat HTML/JS önlenir)
+    e.respondWith((async () => {
+      try {
+        const net = await fetch(req, { cache: "reload" });
+        e.waitUntil(caches.open(CACHE).then((c) => c.put(req, net.clone())));
+        return net;
+      } catch (err) {
+        const hit = await caches.match(req);
+        return hit || (req.mode === "navigate" ? await caches.match("./index.html") : Response.error());
+      }
+    })());
     return;
   }
 
-  // Çapraz köken: YALNIZCA statik varlıkları önbellekle (Google Fonts + gstatic/
-  // Firebase SDK). Firebase API çağrılarını (firestore/auth) ASLA önbellekleme —
-  // bunlar canlı/akış istekleridir; SW'ye hiç dokundurmadan ağa bırak.
+  // Çapraz köken: yalnızca yazı tipleri / gstatic önbelleğe (Firebase API'leri hariç)
   const cacheable = url.host === "fonts.googleapis.com" || url.host.endsWith(".gstatic.com");
-  if (!cacheable) return; // ağ passtrough (firestore.googleapis.com, identitytoolkit, firebaseapp.com vb.)
-
-  // bayatla-ve-yenile
+  if (!cacheable) return;
   e.respondWith(
     caches.match(req).then((hit) => {
       const fetchPromise = fetch(req)
         .then((net) => {
-          const copy = net.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
+          e.waitUntil(caches.open(CACHE).then((c) => c.put(req, net.clone())));
           return net;
         })
         .catch(() => hit);

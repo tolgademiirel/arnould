@@ -69,7 +69,8 @@ function buildAuthUrl(nonce) {
 }
 function signIn() {
   var nonce = randNonce();
-  try { sessionStorage.setItem(NONCE_KEY, nonce); } catch (e) {}
+  // localStorage (sessionStorage değil): standalone PWA ↔ Safari sıçramasında korunur
+  try { localStorage.setItem(NONCE_KEY, nonce); } catch (e) {}
   location.href = buildAuthUrl(nonce);
 }
 async function doSignOut() {
@@ -96,7 +97,8 @@ function handleOAuthRedirect() {
     var payload = JSON.parse(decodeURIComponent(escape(atob(
       idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")
     ))));
-    var expected = sessionStorage.getItem(NONCE_KEY);
+    var expected = localStorage.getItem(NONCE_KEY);
+    try { localStorage.removeItem(NONCE_KEY); } catch (e2) {}
     if (expected && payload.nonce && payload.nonce !== expected) {
       console.warn("nonce uyuşmadı"); return;
     }

@@ -247,11 +247,39 @@
   <!-- Bulut senkronu (Firebase) — ES modülü, klasik scriptlerden sonra çalışır -->
   <script type="module" src="js/sync.js"></script>
 
-  <!-- Service Worker kaydı (çevrimdışı / kurulabilir PWA) -->
+  <!-- Service Worker kaydı (çevrimdışı / kurulabilir PWA) + güvenilir oto-güncelleme -->
   <script>
     if ("serviceWorker" in navigator) {
+      // Yeni SW kontrolü ele alınca sayfayı BİR KEZ yenile (eski sürümde takılmayı bitirir)
+      var __swRefreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (__swRefreshing) return;
+        __swRefreshing = true;
+        window.location.reload();
+      });
       window.addEventListener("load", function () {
-        navigator.serviceWorker.register("sw.js").catch(function (err) {
+        // updateViaCache:"none" → sw.js güncellik kontrolü HTTP önbelleğini atlar
+        navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (reg) {
+          // Beklemede bir SW varsa hemen devreye al
+          if (reg.waiting && navigator.serviceWorker.controller) {
+            reg.waiting.postMessage({ type: "SKIP_WAITING" });
+          }
+          reg.addEventListener("updatefound", function () {
+            var nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener("statechange", function () {
+              if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                nw.postMessage({ type: "SKIP_WAITING" }); // → controllerchange → reload
+              }
+            });
+          });
+          // Açıkken güncelleme yokla: 60 sn'de bir + sekme öne gelince (iOS standalone için kritik)
+          var check = function () { try { reg.update(); } catch (e) {} };
+          setInterval(check, 60 * 1000);
+          document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "visible") check();
+          });
+        }).catch(function (err) {
           console.warn("SW kaydı başarısız:", err);
         });
       });
