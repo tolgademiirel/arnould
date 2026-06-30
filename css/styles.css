@@ -83,15 +83,24 @@
 html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  max-width: 100%;
 }
 html {
   min-height: 100%;
   background: var(--bg);
+  /* Mobilde asıl kaydırılan eleman <html>'dir; yatay kaymayı burada da kes.
+     Yalnızca body'de overflow-x:hidden olması fixed/taşan ögelerde
+     sağa-sola kaymayı engellemez. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
   transition: background 0.4s var(--ease);
 }
 
 body {
-  min-height: 100vh;
+  position: relative;
+  min-height: 100vh;        /* eski tarayıcılar için yedek */
+  min-height: 100dvh;       /* mobilde tam ekran: tarayıcı çubukları dahil dinamik yükseklik */
   background: var(--bg);
   color: var(--text);
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -504,7 +513,8 @@ input, select { font-family: inherit; }
 .modal {
   position: relative;
   width: min(620px, 100%);
-  max-height: 90vh;
+  max-height: 90vh;     /* eski tarayıcılar için yedek */
+  max-height: 90dvh;    /* mobilde dinamik görünüm yüksekliği (klavye/çubuklar) */
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -562,8 +572,23 @@ input, select { font-family: inherit; }
 }
 .day-title-input:focus { outline: none; border-color: var(--volt); }
 
-.done-toggle { cursor: pointer; user-select: none; }
-.done-toggle input { display: none; }
+.done-toggle { cursor: pointer; user-select: none; position: relative; }
+/* Onay kutusunu görsel olarak gizle ama klavye/ekran okuyucu için erişilebilir
+   tut (display:none odaktan ve erişilebilirlik ağacından çıkarırdı). */
+.done-toggle input {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* Klavye odağını görünür hâle getir (odak halkasını pill üzerine yansıt) */
+.done-toggle input:focus-visible + .done-pill {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
 .done-pill {
   display: inline-flex;
   align-items: center;
@@ -586,17 +611,31 @@ input, select { font-family: inherit; }
 .done-toggle input:checked + .done-pill .done-dot { background: var(--on-volt); border-color: var(--on-volt); }
 
 .ex-summary {
-  display: flex;
-  gap: 18px;
-  flex-wrap: wrap;
-  padding: 12px 16px;
+  /* Eşit sütunlu grid: rakamlar ve etiketler her satırda aynı x'te hizalanır.
+     (flex-wrap'ta sütun başlangıcı önceki öğenin genişliğine bağlı kalıp
+     zikzak/kırık hizalamaya yol açıyordu.) */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 18px;
+  padding: 14px 16px;
   background: var(--surface-2);
   border-radius: 12px;
   margin-bottom: 14px;
 }
-.ex-summary .sm { display: flex; flex-direction: column; }
-.ex-summary .sm b { font-family: "Oswald"; font-size: 22px; font-weight: 700; line-height: 1; }
-.ex-summary .sm span { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; margin-top: 3px; }
+.ex-summary .sm {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Üstteki istatistik kartlarıyla aynı dil: her metriğin yanında renkli işaret */
+  padding-left: 11px;
+  border-left: 3px solid var(--line);
+}
+.ex-summary .sm:nth-child(1) { border-left-color: var(--volt); }      /* Hareket */
+.ex-summary .sm:nth-child(2) { border-left-color: var(--r-sirt); }    /* Toplam Set */
+.ex-summary .sm:nth-child(3) { border-left-color: var(--orange); }    /* Tahmini Süre */
+.ex-summary .sm:nth-child(4) { border-left-color: var(--r-bacak); }   /* Bölge */
+.ex-summary .sm b { font-family: "Oswald"; font-size: 22px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.ex-summary .sm span { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; margin-top: 4px; }
 .ex-summary.empty { display: none; }
 
 .ex-list { display: flex; flex-direction: column; gap: 8px; }
@@ -669,13 +708,18 @@ input, select { font-family: inherit; }
 .form-title { margin: 0 0 12px; font-family: "Oswald"; font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; }
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* minmax(0,1fr): 1fr varsayılanı minmax(auto,1fr)'dir; "auto" minimumu
+     input/select içerik genişliği kadardır ve sütunların daralmasını engelleyip
+     çerçeveyi taşırır (grid blowout). 0 minimum ile sütunlar daralabilir. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
-.fld { display: flex; flex-direction: column; gap: 5px; }
+.fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .fld-wide { grid-column: span 4; }
 .fld span { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
 .fld input, .fld select {
+  width: 100%;
+  min-width: 0;       /* öğenin içerik tabanlı asgari genişliğini sıfırla */
   background: var(--surface);
   border: 1px solid var(--line);
   color: var(--text);
@@ -876,8 +920,9 @@ input, select { font-family: inherit; }
   .stat-label { letter-spacing: 0.08em; }
   .stat-ring-card { flex-direction: column; align-items: flex-start; gap: 8px; }
   .mini-ring { width: 44px; height: 44px; }
-  .form-grid { grid-template-columns: repeat(2, 1fr); }
+  .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fld-wide { grid-column: span 2; }
+  .ex-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
   .modal { padding: 18px 16px; }
   .modal-foot { flex-direction: column; }
 }
