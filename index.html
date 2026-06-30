@@ -19,9 +19,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
-
-  <!-- Google Identity Services (Safari dahil her tarayıcıda popupsuz giriş) -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <!-- Dekoratif arka plan: kulvar çizgileri -->
@@ -65,7 +62,7 @@
         <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
       </button>
       <div class="menu-pop" id="menuPop" hidden>
-        <div class="sync-signin" id="gisWrap"><div id="gisBtn"></div></div>
+        <button data-action="signin" id="signinBtn">Google ile Giriş Yap (senkron)</button>
         <div class="sync-account" id="syncAccount" hidden>
           <span class="sync-email" id="syncEmail">—</span>
           <button data-action="signout" class="sync-signout">Çıkış</button>

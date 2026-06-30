@@ -1,16 +1,17 @@
 /* ============================================================
    sync.js — Firebase ile cihazlar arası bulut senkronu
-   - Google ile giriş (web: popup, mobil/standalone: redirect)
-   - Tüm durum tek bir kullanıcı belgesinde (users/{uid}) JSON blob
+   - Giriş: POPUPSUZ, tam-sayfa Google yönlendirmesi (OIDC implicit).
+     Google'a gidilir, ID token URL fragment'ında (#id_token=...) geri döner,
+     signInWithCredential ile Firebase oturumu açılır. Safari/iPhone dahil
+     her tarayıcıda çalışır (popup/üçüncü-taraf çerez gerektirmez).
+   - Tüm durum tek kullanıcı belgesinde (users/{uid}) JSON blob.
    - localStorage daima yerel gerçektir; bulutla updatedAt'e göre uzlaşır
-     (en son değişiklik kazanır). Çevrimdışı yapılan değişiklikler bir
-     sonraki çevrimiçi açılışta buluta itilir.
+     (en son değişiklik kazanır).
    ES modülüdür: klasik scriptlerden (window.App) SONRA çalışır.
    ============================================================ */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-  getRedirectResult, signInWithCredential, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot
@@ -25,13 +26,13 @@ const firebaseConfig = {
   appId: "1:889161863929:web:cb3f4b52ae6c78f0078828",
 };
 
-// Google Identity Services (GIS) için OAuth Web Client ID
-const GIS_CLIENT_ID = "889161863929-9h87mdfeuh11taaju5okeblei7cda513.apps.googleusercontent.com";
+// OAuth Web Client ID (Google Cloud → arnouldweb → Credentials)
+const OAUTH_CLIENT_ID = "889161863929-9h87mdfeuh11taaju5okeblei7cda513.apps.googleusercontent.com";
+const NONCE_KEY = "arnould_oauth_nonce";
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
-const provider = new GoogleAuthProvider();
 
 const App = (window.App = window.App || {});
 const Store = App.Store;
@@ -44,34 +45,67 @@ let onRemote = function () {};
 
 function toast(msg) { if (App.UI && App.UI.toast) App.UI.toast(msg); }
 
-function isMobileOrStandalone() {
-  var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
-    window.navigator.standalone === true;
-  return standalone || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+/* ---------- Giriş (popupsuz, tam-sayfa yönlendirme) ---------- */
+function randNonce() {
+  var a = new Uint8Array(16);
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  return Array.prototype.map.call(a, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
 }
-
-/* ---------- Giriş / çıkış ---------- */
-async function signIn() {
-  // POPUP'ı her platformda öncele: signInWithRedirect, uygulama alan adı
-  // (github.io) ile authDomain (firebaseapp.com) farklı olduğunda mobil
-  // tarayıcılarda çerez/depolama kısıtları yüzünden oturumu kaybediyor.
-  // Popup aynı origin'e postMessage ile döndüğü için çapraz-alana bağımlı değil.
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (e) {
-    var code = (e && e.code) || "";
-    console.error("ARNOULD giriş hatası:", code, e);
-    // Popup engellendi/desteklenmiyor (örn. kurulu PWA standalone) → redirect'e düş
-    if (/popup-blocked|popup-closed|cancelled-popup|operation-not-supported|web-storage-unsupported/i.test(code)) {
-      try { await signInWithRedirect(auth, provider); return; }
-      catch (e2) { console.error("Yönlendirme de başarısız:", e2); code = (e2 && e2.code) || code; }
-    }
-    toast("Giriş yapılamadı: " + (code || "bilinmeyen hata"));
-  }
+// Geri dönüş adresi (Google'da "Authorized redirect URIs"e bu eklenmiş olmalı).
+// index.html ile / sonu aynı yere normalize edilir.
+function redirectUri() {
+  return location.origin + location.pathname.replace(/index\.html$/, "");
+}
+function buildAuthUrl(nonce) {
+  var p = new URLSearchParams({
+    client_id: OAUTH_CLIENT_ID,
+    redirect_uri: redirectUri(),
+    response_type: "id_token",
+    scope: "openid email profile",
+    nonce: nonce,
+    prompt: "select_account",
+  });
+  return "https://accounts.google.com/o/oauth2/v2/auth?" + p.toString();
+}
+function signIn() {
+  var nonce = randNonce();
+  try { sessionStorage.setItem(NONCE_KEY, nonce); } catch (e) {}
+  location.href = buildAuthUrl(nonce);
 }
 async function doSignOut() {
-  try { await signOut(auth); toast("Çıkış yapıldı"); }
-  catch (e) { console.warn(e); }
+  try { await signOut(auth); toast("Çıkış yapıldı"); } catch (e) { console.warn(e); }
+}
+
+// Google'dan dönüşte URL fragment'ındaki id_token'ı işle
+function handleOAuthRedirect() {
+  if (!location.hash || location.hash.indexOf("id_token=") === -1) {
+    // Hata da fragment veya query'de gelebilir
+    if (location.hash.indexOf("error=") !== -1) {
+      var ep = new URLSearchParams(location.hash.substring(1));
+      toast("Giriş yapılamadı: " + (ep.get("error") || "hata"));
+      try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    }
+    return;
+  }
+  var hp = new URLSearchParams(location.hash.substring(1));
+  var idToken = hp.get("id_token");
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {} // token'ı URL'den temizle
+  if (!idToken) return;
+  // nonce doğrula (replay koruması)
+  try {
+    var payload = JSON.parse(decodeURIComponent(escape(atob(
+      idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")
+    ))));
+    var expected = sessionStorage.getItem(NONCE_KEY);
+    if (expected && payload.nonce && payload.nonce !== expected) {
+      console.warn("nonce uyuşmadı"); return;
+    }
+  } catch (e) { /* çözümlenemezse yine de devam et */ }
+  var cred = GoogleAuthProvider.credential(idToken);
+  signInWithCredential(auth, cred).catch(function (e) {
+    console.error("Giriş hatası:", e && e.code, e);
+    toast("Giriş yapılamadı: " + ((e && e.code) || "bilinmeyen hata"));
+  });
 }
 
 /* ---------- Buluta yazma (debounce) ---------- */
@@ -85,125 +119,57 @@ async function pushNow() {
   try {
     var state = Store.getState();
     await setDoc(userDocRef, { blob: JSON.stringify(state), updatedAt: state.updatedAt || 0 });
-  } catch (e) {
-    // Çevrimdışı: localStorage zaten kaydetti; sonraki açılışta uzlaşılır
-  }
+  } catch (e) { /* çevrimdışı: sonraki açılışta uzlaşılır */ }
 }
 
 /* ---------- Buluttan benimseme ---------- */
 function adopt(data) {
   try {
     var remote = JSON.parse(data.blob);
-    Store.applyRemote(remote);   // sessiz: updatedAt korunur, tekrar push yok
-    onRemote();                  // arayüzü yeniden çiz
+    Store.applyRemote(remote);
+    onRemote();
   } catch (e) { console.warn("Bulut verisi okunamadı:", e); }
 }
 
 /* ---------- İlk uzlaşma (giriş anında) ---------- */
 async function reconcile() {
   var snap;
-  try { snap = await getDoc(userDocRef); }
-  catch (e) { return; } // çevrimdışı: yerelle devam
+  try { snap = await getDoc(userDocRef); } catch (e) { return; }
   var localU = (Store.getState().updatedAt) || 0;
-  if (!snap.exists()) { await pushNow(); return; }          // bulut boş → yereli yükle
+  if (!snap.exists()) { await pushNow(); return; }
   var data = snap.data();
   var cloudU = (data && data.updatedAt) || 0;
-  if (cloudU > localU) adopt(data);                          // bulut daha yeni → benimse
-  else if (localU > cloudU) await pushNow();                 // yerel daha yeni → yükle
+  if (cloudU > localU) adopt(data);
+  else if (localU > cloudU) await pushNow();
 }
 
-/* ---------- Gerçek zamanlı dinleme (diğer cihazlar) ---------- */
+/* ---------- Gerçek zamanlı dinleme ---------- */
 function startRealtime() {
   if (unsub) unsub();
   unsub = onSnapshot(userDocRef, function (snap) {
     if (!snap.exists()) return;
-    if (snap.metadata.hasPendingWrites) return; // kendi yazımız
+    if (snap.metadata.hasPendingWrites) return;
     var data = snap.data();
     var localU = (Store.getState().updatedAt) || 0;
     if (((data && data.updatedAt) || 0) > localU) adopt(data);
-  }, function () { /* hata: yoksay */ });
+  }, function () {});
 }
-
-/* ---------- Google Identity Services (GIS) ----------
-   Popup/redirect yerine GIS kullanıyoruz: Google'ın kendi (ilk-taraf)
-   akışı bir ID token döndürür, biz onu signInWithCredential ile Firebase
-   oturumuna çeviririz. Safari/iPhone dahil her tarayıcıda çalışır. */
-var gisInited = false;
-
-function handleCredential(resp) {
-  if (!resp || !resp.credential) return;
-  var cred = GoogleAuthProvider.credential(resp.credential);
-  signInWithCredential(auth, cred).catch(function (e) {
-    console.error("GIS giriş hatası:", e && e.code, e);
-    toast("Giriş yapılamadı: " + ((e && e.code) || "bilinmeyen hata"));
-  });
-}
-
-function initGIS() {
-  if (gisInited) return;
-  if (!(window.google && google.accounts && google.accounts.id)) return; // GIS henüz yüklenmedi
-  google.accounts.id.initialize({
-    client_id: GIS_CLIENT_ID,
-    callback: handleCredential,
-    auto_select: false,
-    cancel_on_tap_outside: true,
-    use_fedcm_for_prompt: true,
-  });
-  gisInited = true;
-  renderButton();
-}
-
-// GIS butonunu menüye çiz (görünür olunca çağrılmalı; gizli kapsayıcıda 0 boyut olur)
-function renderButton() {
-  var el = document.getElementById("gisBtn");
-  if (!el || currentUser) return;
-  if (!gisInited) { initGIS(); return; }
-  el.innerHTML = "";
-  try {
-    google.accounts.id.renderButton(el, {
-      type: "standard", theme: "filled_blue", size: "large",
-      text: "signin_with", shape: "pill", locale: "tr", width: 210,
-    });
-  } catch (e) { console.warn("GIS buton çizilemedi:", e); }
-}
-
-// GIS yüklenene kadar bekle; yüklenmezse popup'a düşen yedek buton göster
-var gisPoll = setInterval(function () {
-  if (window.google && google.accounts && google.accounts.id) {
-    clearInterval(gisPoll); gisPoll = null; initGIS();
-  }
-}, 200);
-setTimeout(function () {
-  if (gisPoll) { clearInterval(gisPoll); gisPoll = null; }
-  if (!gisInited && !currentUser) {
-    // Yedek: GIS gelmedi → klasik popup butonu
-    var el = document.getElementById("gisBtn");
-    if (el && !el.firstChild) {
-      var b = document.createElement("button");
-      b.textContent = "Google ile Giriş Yap";
-      b.className = "gis-fallback";
-      b.onclick = signIn;
-      el.appendChild(b);
-    }
-  }
-}, 6000);
 
 /* ---------- Menü arayüzü ---------- */
 function setUI(user) {
-  var wrap = document.getElementById("gisWrap");
+  var signinBtn = document.getElementById("signinBtn");
   var acct = document.getElementById("syncAccount");
   var emailEl = document.getElementById("syncEmail");
-  if (!wrap || !acct) return;
+  if (!signinBtn || !acct) return;
   if (user) {
-    wrap.hidden = true;
+    signinBtn.hidden = true;
     acct.hidden = false;
     if (emailEl) emailEl.textContent = user.email || user.displayName || "Hesap";
-    var menu = document.getElementById("menuPop");   // giriş sonrası menüyü kapat
+    var menu = document.getElementById("menuPop");
     if (menu) menu.hidden = true;
   } else {
-    wrap.hidden = false;
+    signinBtn.hidden = false;
     acct.hidden = true;
-    renderButton();
   }
 }
 
@@ -222,21 +188,15 @@ onAuthStateChanged(auth, async function (user) {
   }
 });
 
-// Mobil yönlendirme dönüşü (varsa) — hata olursa kodu göster
-getRedirectResult(auth).catch(function (e) {
-  console.error("Yönlendirme dönüş hatası:", e && e.code, e);
-  if (e && e.code) toast("Giriş yapılamadı: " + e.code);
-});
+// Sayfa açılışında Google dönüşünü işle
+handleOAuthRedirect();
 
 /* ---------- Dışa aç ---------- */
 App.Sync = {
   signIn: signIn,
   signOut: doSignOut,
   isSignedIn: function () { return !!currentUser; },
-  renderButton: renderButton, // app.js menü açılınca çağırır (görünür çizim için)
 };
 
-// Kaydetme kancası: her gerçek değişiklikte buluta it
 if (Store && Store.setSaveHook) Store.setSaveHook(schedulePush);
-// Uzaktan veri gelince yeniden çizim için app.js'in sağladığı geri çağrı
 onRemote = (typeof App.onRemoteData === "function") ? App.onRemoteData : function () {};

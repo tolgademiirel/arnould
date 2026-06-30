@@ -292,18 +292,7 @@ input, select { font-family: inherit; }
 .menu-pop button:hover { background: var(--surface-2); }
 .menu-pop button.danger { color: #ff6b6b; }
 .menu-pop button.danger:hover { background: color-mix(in srgb, #ff6b6b 14%, var(--surface)); }
-.sync-signin { padding: 8px 10px; display: flex; justify-content: center; min-height: 40px; }
-#gisBtn { display: flex; justify-content: center; }
-.gis-fallback {
-  width: 100%;
-  text-align: center !important;
-  color: var(--accent-ink) !important;
-  font-weight: 600 !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 9px !important;
-  padding: 9px 12px !important;
-  background: var(--surface-2) !important;
-}
+#signinBtn { color: var(--accent-ink); font-weight: 600; }
 .menu-sep { height: 1px; background: var(--line); margin: 6px 4px; }
 .sync-account {
   display: flex;

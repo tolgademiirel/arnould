@@ -278,6 +278,10 @@
   function handleMenu(action) {
     document.getElementById("menuPop").hidden = true;
     document.getElementById("menuBtn").setAttribute("aria-expanded", "false");
+    if (action === "signin") {
+      if (App.Sync) App.Sync.signIn(); else UI.toast("Senkron yüklenemedi");
+      return;
+    }
     if (action === "signout") {
       if (App.Sync) App.Sync.signOut();
       return;
@@ -371,8 +375,6 @@
     function setMenuOpen(open) {
       menuPop.hidden = !open;
       menuBtn.setAttribute("aria-expanded", String(open));
-      // GIS giriş butonunu menü görünür olunca çiz (gizli kapsayıcıda 0 boyut olur)
-      if (open && App.Sync && App.Sync.renderButton) App.Sync.renderButton();
     }
     menuBtn.onclick = function (e) { e.stopPropagation(); setMenuOpen(menuPop.hidden); };
     menuPop.addEventListener("click", function (e) {
