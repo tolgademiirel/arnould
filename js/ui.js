@@ -99,7 +99,7 @@
       if (hasWork) {
         if (w.completed) inner += '<span class="dc-done-check" style="position:absolute;top:10px;right:10px">' + checkSvg() + "</span>";
         if (w.title) inner += '<div class="dc-title">' + esc(w.title) + "</div>";
-        inner += '<div class="dc-ex-count">' + t.count + " hareket · " + t.sets + " set</div>";
+        inner += '<div class="dc-ex-count">' + t.count + " hareket · " + t.sets + " set" + autoMark(w) + "</div>";
         inner += '<div class="dc-dots">' + t.regions.slice(0, 6).map(function (r) {
           return '<span class="dc-dot" style="background:' + regionColor(r) + '"></span>';
         }).join("") + "</div>";
@@ -151,6 +151,7 @@
         '<div class="wk-date">' + d.getDate() +
         (t.minutes ? ' <span class="dc-dur">≈ ' + t.minutes + " dk</span>" : "") +
         (w && w.completed ? ' <span class="dc-done-check">' + checkSvg() + "</span>" : "") +
+        autoMark(w) +
         "</div></div>" +
         '<div class="wk-body">' + body + "</div>" +
         '<button class="btn ghost wk-add" data-key="' + key + '" data-date="' + d.getFullYear() + "," + d.getMonth() + "," + d.getDate() + '">Düzenle</button>' +
@@ -337,6 +338,14 @@
 
   function checkSvg() {
     return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4 10-11" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+  function recurringSvg(sz) {
+    sz = sz || 13;
+    return '<svg viewBox="0 0 24 24" width="' + sz + '" height="' + sz + '" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12a8 8 0 0 1 13.7-5.7L20 8M20 3v5h-5M20 12a8 8 0 0 1-13.7 5.7L4 16M4 21v-5h5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+  /* Tekrarlayan programdan gelen gün için satır içi işaret */
+  function autoMark(w) {
+    return (w && w.auto) ? ' <span class="rec-mark" title="Tekrarlayan programdan">' + recurringSvg(12) + "</span>" : "";
   }
 
   App.UI = {

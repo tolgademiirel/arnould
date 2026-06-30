@@ -760,6 +760,62 @@ input, select { font-family: inherit; }
 .btn.solid { background: var(--volt); color: var(--on-volt); border-color: var(--volt); flex: 1; }
 .btn.solid:hover { background: var(--volt-deep); }
 .btn.solid.big { height: 56px; font-size: 17px; padding: 0 30px; }
+.btn.sm { height: 38px; padding: 0 13px; font-size: 13px; font-weight: 600; border-radius: 10px; flex: none; }
+.btn.sm svg { flex: none; }
+
+/* ---------- Hafta araç çubuğu (tekrarlama + hafta kopyala/yapıştır) ---------- */
+.week-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.recurring-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--volt) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--volt) 35%, var(--line));
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--volt); flex: none; }
+.rec-clear {
+  border: 0;
+  background: transparent;
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 12.5px;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+
+/* ---------- Gün kopyala / yapıştır ---------- */
+.day-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 12.5px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.chip-btn:hover { color: var(--text); border-color: var(--volt); }
+.chip-btn svg { flex: none; }
+
+/* Tekrarlayan programdan gelen (otomatik) gün işareti — satır içi */
+.rec-mark { color: var(--accent-ink); display: inline-grid; place-items: center; vertical-align: -2px; }
+.rec-mark svg { display: block; }
 
 /* ============================ ZAMANLAYICI ============================ */
 .timer-modal { width: min(440px, 100%); text-align: center; }

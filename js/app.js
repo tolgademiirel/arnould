@@ -92,8 +92,27 @@
     applyTheme();
   }
 
+  /* Tekrarlayan program: bugünden, görüntülenen döneme yetecek kadar ileriye
+     boş/otomatik günleri doldur (kaydırmalı ufuk). */
+  function ensureHorizon() {
+    if (!Store.hasRecurring()) return;
+    var today = new Date();
+    var diffWeeks = Math.round((UI.startOfWeek(focus) - UI.startOfWeek(today)) / (7 * 86400000));
+    Store.materialize(today, Math.max(12, diffWeeks + 6));
+  }
+
+  function updateWeekToolbar() {
+    var tb = document.getElementById("weekToolbar");
+    tb.hidden = (view !== "week");
+    if (view !== "week") return;
+    var cb = Store.getClipboard();
+    document.getElementById("pasteWeekBtn").hidden = !(cb && cb.type === "week");
+    document.getElementById("recurringStatus").hidden = !Store.hasRecurring();
+  }
+
   /* ---------- Render ---------- */
   function refresh() {
+    ensureHorizon();
     document.getElementById("periodLabel").textContent = UI.periodLabel(focus, view);
     UI.renderStats(focus, view);
 
@@ -108,6 +127,7 @@
       monthEl.hidden = false; weekEl.hidden = true; headEl.style.display = "";
       UI.renderCalendar(focus);
     }
+    updateWeekToolbar();
 
     var vm = document.getElementById("viewMonth"), vw = document.getElementById("viewWeek");
     vm.classList.toggle("is-active", view === "month");
@@ -169,12 +189,18 @@
     var p = str.split(",").map(Number);
     return new Date(p[0], p[1], p[2]);
   }
+  function updateDayActions() {
+    var cb = Store.getClipboard();
+    document.getElementById("pasteDayBtn").hidden = !(cb && cb.type === "day");
+  }
+
   function openDay(date) {
     lastFocus = document.activeElement;
     activeDate = date;
     editingId = null;
     hideForm();
     UI.fillDayModal(date);
+    updateDayActions();
     document.getElementById("dayOverlay").hidden = false;
     document.body.style.overflow = "hidden";
     setBgInert(true);
@@ -407,6 +433,58 @@
       var ret = lastFocus;
       closeDayKeepData();
       openTimer(ret || null);
+    };
+
+    // Gün kopyala / yapıştır
+    document.getElementById("copyDayBtn").onclick = function () {
+      if (!activeDate) return;
+      Store.copyDay(Store.dateKey(activeDate));
+      updateDayActions();
+      UI.toast("Gün kopyalandı");
+    };
+    document.getElementById("pasteDayBtn").onclick = function () {
+      if (!activeDate) return;
+      var key = Store.dateKey(activeDate);
+      var w = Store.getWorkout(key);
+      if (w && w.exercises && w.exercises.length &&
+          !confirm("Bu günün mevcut programı değiştirilsin mi?")) return;
+      if (Store.pasteDay(key)) {
+        UI.fillDayModal(activeDate);
+        updateDayActions();
+        UI.toast("Yapıştırıldı");
+      }
+    };
+
+    // Hafta araç çubuğu: kopyala / yapıştır / tekrarlayan program
+    document.getElementById("copyWeekBtn").onclick = function () {
+      Store.copyWeek(UI.startOfWeek(focus));
+      updateWeekToolbar();
+      UI.toast("Hafta kopyalandı");
+    };
+    document.getElementById("pasteWeekBtn").onclick = function () {
+      var mon = UI.startOfWeek(focus);
+      var nonEmpty = false;
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i);
+        var w = Store.getWorkout(Store.dateKey(d));
+        if (w && w.exercises && w.exercises.length) { nonEmpty = true; break; }
+      }
+      if (nonEmpty && !confirm("Bu haftadaki dolu günlerin üzerine yazılabilir. Devam edilsin mi?")) return;
+      if (Store.pasteWeek(mon)) { refresh(); UI.toast("Haftaya yapıştırıldı"); }
+    };
+    document.getElementById("setRecurringBtn").onclick = function () {
+      var mon = UI.startOfWeek(focus);
+      if (!confirm("Bu haftanın programı 'haftalık program' olarak kaydedilecek ve bugünden ileriye otomatik uygulanacak. Elle düzenlediğin günler korunur. Devam edelim mi?")) return;
+      if (!Store.setRecurring(mon)) { UI.toast("Bu hafta boş — önce program ekleyin"); return; }
+      var n = Store.materialize(new Date(), 12);
+      refresh();
+      UI.toast("Haftalık program kaydedildi" + (n ? " (" + n + " gün uygulandı)" : ""));
+    };
+    document.getElementById("clearRecurringBtn").onclick = function () {
+      if (!confirm("Tekrarlayan haftalık program durdurulsun mu? Şimdiye dek atanmış günler kalır.")) return;
+      Store.clearRecurring();
+      updateWeekToolbar();
+      UI.toast("Tekrarlama durduruldu");
     };
 
     // Zamanlayıcı

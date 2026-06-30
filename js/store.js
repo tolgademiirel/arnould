@@ -25,7 +25,9 @@
     return {
       version: 1,
       settings: { theme: "dark", view: "month", seeded: false },
-      workouts: {}, // "YYYY-MM-DD" -> { title, completed, exercises:[] }
+      workouts: {}, // "YYYY-MM-DD" -> { title, completed, exercises:[], auto?, autoVersion? }
+      schedule: null,   // tekrarlayan haftalık program: { weekly:{0..6:program|null}, updatedAt }
+      clipboard: null,  // kopyala-yapıştır panosu: { type:"day"|"week", payload }
     };
   }
 
@@ -44,6 +46,8 @@
         if (typeof state.workouts !== "object" || state.workouts === null || Array.isArray(state.workouts)) {
           state.workouts = {};
         }
+        state.schedule = sanitizeSchedule(parsed.schedule);
+        state.clipboard = sanitizeClipboard(parsed.clipboard);
       }
     } catch (e) {
       console.warn("ARNOULD: veriler okunamadı, sıfırdan başlanıyor.", e);
@@ -107,8 +111,15 @@
     return Math.max(min, Math.min(max, n));
   }
 
+  // Bir gün elle düzenlendiğinde otomatik (tekrarlayan programdan gelen) etiketi
+  // kaldır: o gün artık "kullanıcıya ait"tir ve program değişse de üzerine yazılmaz.
+  function detach(w) {
+    if (w && w.auto) { w.auto = false; delete w.autoVersion; }
+  }
+
   function addExercise(key, ex) {
     var w = ensureWorkout(key);
+    detach(w);
     ex.id = newId();
     w.exercises.push(ex);
     save();
@@ -119,12 +130,13 @@
     var w = state.workouts[key];
     if (!w) return;
     var ex = w.exercises.find(function (e) { return e.id === id; });
-    if (ex) { Object.assign(ex, patch); save(); }
+    if (ex) { detach(w); Object.assign(ex, patch); save(); }
   }
 
   function deleteExercise(key, id) {
     var w = state.workouts[key];
     if (!w) return;
+    detach(w);
     w.exercises = w.exercises.filter(function (e) { return e.id !== id; });
     pruneIfEmpty(key);
     save();
@@ -132,6 +144,7 @@
 
   function setDayTitle(key, title) {
     var w = ensureWorkout(key);
+    detach(w);
     w.title = title;
     pruneIfEmpty(key);
     save();
@@ -139,6 +152,7 @@
 
   function toggleComplete(key, value) {
     var w = ensureWorkout(key);
+    detach(w);
     w.completed = value;
     pruneIfEmpty(key);
     save();
@@ -155,6 +169,158 @@
       if (regions.indexOf(e.region) === -1) regions.push(e.region);
     });
     return { minutes: minutes, sets: sets, count: w.exercises.length, regions: regions };
+  }
+
+  /* ============================================================
+     Kopyala-yapıştır + tekrarlayan haftalık program
+     ============================================================ */
+
+  /* Hareket listesini id'siz, temiz bir kopyaya indir (pano/şablon için) */
+  function stripExercises(arr) {
+    return (Array.isArray(arr) ? arr : []).map(function (e) {
+      return {
+        name: String(e.name == null ? "" : e.name).slice(0, 80),
+        region: REGION_MAP[e.region] ? e.region : "full",
+        sets: clampInt(e.sets, 0, 99),
+        reps: String(e.reps == null ? "" : e.reps).slice(0, 20),
+        duration: clampInt(e.duration, 0, 999),
+        notes: String(e.notes == null ? "" : e.notes).slice(0, 140),
+      };
+    });
+  }
+  /* Bir günü program nesnesine çevir (title + id'siz hareketler); boşsa null */
+  function programFrom(w) {
+    if (!w || !w.exercises || !w.exercises.length) {
+      return (w && w.title) ? { title: w.title, exercises: [] } : null;
+    }
+    return { title: w.title || "", exercises: stripExercises(w.exercises) };
+  }
+  /* Programı yeni id'li gerçek hareketlere genişlet */
+  function withNewIds(arr) {
+    return stripExercises(arr).map(function (e) {
+      e.id = newId();
+      return e;
+    });
+  }
+  function weekdayIndex(d) { return (d.getDay() + 6) % 7; } // 0=Pzt..6=Paz
+  function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+
+  /* ---------- Pano (kopyala / yapıştır) ---------- */
+  function copyDay(key) {
+    state.clipboard = { type: "day", payload: programFrom(state.workouts[key]) || { title: "", exercises: [] } };
+    save();
+  }
+  function copyWeek(weekStart) {
+    var days = [];
+    for (var i = 0; i < 7; i++) days.push(programFrom(state.workouts[dateKey(addDays(weekStart, i))]));
+    state.clipboard = { type: "week", payload: days };
+    save();
+  }
+  function getClipboard() { return state.clipboard; }
+
+  /* Bir programı bir güne yaz (id'ler yenilenir, completed sıfırlanır, kullanıcıya ait) */
+  function writeProgram(key, program) {
+    if (!program || !program.exercises || !program.exercises.length) {
+      // boş program: yalnızca başlık varsa onu koru, yoksa hiç dokunma
+      if (program && program.title) state.workouts[key] = { title: program.title, completed: false, exercises: [], auto: false };
+      return;
+    }
+    state.workouts[key] = { title: program.title || "", completed: false, exercises: withNewIds(program.exercises), auto: false };
+  }
+  function pasteDay(key) {
+    if (!state.clipboard || state.clipboard.type !== "day") return false;
+    writeProgram(key, state.clipboard.payload);
+    pruneIfEmpty(key);
+    save();
+    return true;
+  }
+  function pasteWeek(weekStart) {
+    if (!state.clipboard || state.clipboard.type !== "week") return false;
+    var arr = state.clipboard.payload || [];
+    for (var i = 0; i < 7; i++) {
+      // Pano gününde içerik varsa hedefe yaz; boşsa hedefi olduğu gibi bırak
+      if (arr[i] && arr[i].exercises && arr[i].exercises.length) writeProgram(dateKey(addDays(weekStart, i)), arr[i]);
+    }
+    save();
+    return true;
+  }
+
+  /* ---------- Tekrarlayan haftalık program ---------- */
+  function hasRecurring() { return !!(state.schedule && state.schedule.weekly); }
+  function getSchedule() { return state.schedule; }
+
+  /* Bir haftayı (Pzt başlangıç) tekrarlayan program olarak kaydet */
+  function setRecurring(weekStart) {
+    var weekly = {};
+    var any = false;
+    for (var i = 0; i < 7; i++) {
+      var p = programFrom(state.workouts[dateKey(addDays(weekStart, i))]);
+      weekly[i] = (p && p.exercises && p.exercises.length) ? p : null;
+      if (weekly[i]) any = true;
+    }
+    if (!any) return false; // tamamen boş haftadan program yapılmaz
+    state.schedule = { weekly: weekly, updatedAt: Date.now() };
+    save();
+    return true;
+  }
+  function clearRecurring() { state.schedule = null; save(); }
+
+  /* Bugünden ileriye doğru boş/otomatik günleri programa göre doldur.
+     - Boş gün: programdan otomatik (auto) oluştur.
+     - Eski sürümlü otomatik gün: yeni programa göre tazele.
+     - Kullanıcıya ait (auto=false) gün: asla dokunma.
+     - Geçmiş günler: hiç dokunma. */
+  function materialize(fromDate, weeks) {
+    if (!hasRecurring()) return 0;
+    var ver = state.schedule.updatedAt;
+    var total = (weeks || 12) * 7, changed = 0;
+    for (var i = 0; i < total; i++) {
+      var d = addDays(fromDate, i);
+      var key = dateKey(d);
+      var tpl = state.schedule.weekly[weekdayIndex(d)];
+      var ex = state.workouts[key];
+      if (tpl) {
+        if (!ex) {
+          state.workouts[key] = { title: tpl.title || "", completed: false, exercises: withNewIds(tpl.exercises), auto: true, autoVersion: ver };
+          changed++;
+        } else if (ex.auto && ex.autoVersion !== ver) {
+          ex.title = tpl.title || ""; ex.exercises = withNewIds(tpl.exercises); ex.completed = false; ex.autoVersion = ver;
+          changed++;
+        }
+      } else if (ex && ex.auto && ex.autoVersion !== ver) {
+        delete state.workouts[key]; // program o günü dinlenme yaptı: eski otomatik günü temizle
+        changed++;
+      }
+    }
+    if (changed) save();
+    return changed;
+  }
+
+  /* ---------- İçe aktarma doğrulayıcıları ---------- */
+  function sanitizeProgram(p) {
+    if (!p || typeof p !== "object") return null;
+    var ex = stripExercises(p.exercises);
+    if (!ex.length && !p.title) return null;
+    return { title: String(p.title == null ? "" : p.title).slice(0, 60), exercises: ex };
+  }
+  function sanitizeSchedule(s) {
+    if (!s || typeof s !== "object" || !s.weekly || typeof s.weekly !== "object") return null;
+    var weekly = {}, any = false;
+    for (var i = 0; i < 7; i++) {
+      weekly[i] = sanitizeProgram(s.weekly[i]);
+      if (weekly[i]) any = true;
+    }
+    if (!any) return null;
+    var ver = Number(s.updatedAt);
+    return { weekly: weekly, updatedAt: isFinite(ver) ? ver : Date.now() };
+  }
+  function sanitizeClipboard(c) {
+    if (!c || typeof c !== "object") return null;
+    if (c.type === "day") { var p = sanitizeProgram(c.payload); return p ? { type: "day", payload: p } : null; }
+    if (c.type === "week" && Array.isArray(c.payload)) {
+      return { type: "week", payload: c.payload.slice(0, 7).map(sanitizeProgram) };
+    }
+    return null;
   }
 
   /* ---------- Yedekleme ---------- */
@@ -195,13 +361,16 @@
           notes: String(e.notes == null ? "" : e.notes).slice(0, 140),
         });
       });
-      clean.workouts[key] = {
+      var wk = {
         title: String(src.title == null ? "" : src.title).slice(0, 60),
         completed: !!src.completed,
         exercises: exercises,
       };
+      if (src.auto) { wk.auto = true; wk.autoVersion = Number(src.autoVersion) || 0; }
+      clean.workouts[key] = wk;
     });
     clean.__seq = seq;
+    clean.schedule = sanitizeSchedule(parsed.schedule); // tekrarlayan programı da getir
     state = clean;
     save();
   }
@@ -230,6 +399,16 @@
     setDayTitle: setDayTitle,
     toggleComplete: toggleComplete,
     dayTotals: dayTotals,
+    copyDay: copyDay,
+    copyWeek: copyWeek,
+    pasteDay: pasteDay,
+    pasteWeek: pasteWeek,
+    getClipboard: getClipboard,
+    setRecurring: setRecurring,
+    clearRecurring: clearRecurring,
+    hasRecurring: hasRecurring,
+    getSchedule: getSchedule,
+    materialize: materialize,
     exportJSON: exportJSON,
     importJSON: importJSON,
     resetAll: resetAll,

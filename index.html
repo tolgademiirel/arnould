@@ -76,6 +76,19 @@
 
   <!-- TAKVİM -->
   <main class="board">
+    <!-- Hafta araç çubuğu (yalnızca Hafta görünümünde) -->
+    <div class="week-toolbar" id="weekToolbar" hidden>
+      <button class="btn ghost sm" id="setRecurringBtn" type="button" title="Bu haftanın programını ileriye tekrarla">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0 1 13.7-5.7L20 8M20 3v5h-5M20 12a8 8 0 0 1-13.7 5.7L4 16M4 21v-5h5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Bu Haftayı Programım Yap
+      </button>
+      <button class="btn ghost sm" id="copyWeekBtn" type="button">Haftayı Kopyala</button>
+      <button class="btn ghost sm" id="pasteWeekBtn" type="button" hidden>Haftaya Yapıştır</button>
+      <span class="recurring-status" id="recurringStatus" hidden>
+        <span class="rec-dot" aria-hidden="true"></span> Haftalık program etkin
+        <button class="rec-clear" id="clearRecurringBtn" type="button">Kaldır</button>
+      </span>
+    </div>
     <div class="weekday-head" id="weekdayHead"></div>
     <div class="calendar" id="calendar"></div>
     <div class="weekboard" id="weekboard" hidden></div>
@@ -101,6 +114,18 @@
           <input type="checkbox" id="dayDoneInput" />
           <span class="done-pill"><span class="done-dot"></span> Tamamlandı</span>
         </label>
+      </div>
+
+      <!-- Gün kopyala / yapıştır -->
+      <div class="day-actions">
+        <button class="chip-btn" id="copyDayBtn" type="button">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke-linecap="round"/></svg>
+          Günü Kopyala
+        </button>
+        <button class="chip-btn" id="pasteDayBtn" type="button" hidden>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4h6v3H9zM7 5H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Yapıştır
+        </button>
       </div>
 
       <div class="ex-summary" id="exSummary"></div>

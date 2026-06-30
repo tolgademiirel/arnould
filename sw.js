@@ -5,7 +5,7 @@
    - Çapraz köken (yazı tipleri): bayatla-ve-yenile
    Sürüm yükseltmek için CACHE adını değiştir (örn. v3).
    ============================================================ */
-const CACHE = "arnould-v6";
+const CACHE = "arnould-v7";
 const ASSETS = [
   "./",
   "./index.html",
