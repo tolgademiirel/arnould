@@ -62,6 +62,12 @@
         <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
       </button>
       <div class="menu-pop" id="menuPop" hidden>
+        <button data-action="signin" id="signinBtn">Google ile Giriş Yap (senkron)</button>
+        <div class="sync-account" id="syncAccount" hidden>
+          <span class="sync-email" id="syncEmail">—</span>
+          <button data-action="signout" class="sync-signout">Çıkış</button>
+        </div>
+        <div class="menu-sep" aria-hidden="true"></div>
         <button data-action="export">Verileri Dışa Aktar (.json)</button>
         <button data-action="import">Verileri İçe Aktar</button>
         <button data-action="seed">Örnek Programı Yükle</button>
@@ -238,6 +244,8 @@
   <script src="js/timer.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
+  <!-- Bulut senkronu (Firebase) — ES modülü, klasik scriptlerden sonra çalışır -->
+  <script type="module" src="js/sync.js"></script>
 
   <!-- Service Worker kaydı (çevrimdışı / kurulabilir PWA) -->
   <script>

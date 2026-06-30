@@ -292,6 +292,33 @@ input, select { font-family: inherit; }
 .menu-pop button:hover { background: var(--surface-2); }
 .menu-pop button.danger { color: #ff6b6b; }
 .menu-pop button.danger:hover { background: color-mix(in srgb, #ff6b6b 14%, var(--surface)); }
+#signinBtn { color: var(--accent-ink); font-weight: 600; }
+.menu-sep { height: 1px; background: var(--line); margin: 6px 4px; }
+.sync-account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.sync-email {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sync-signout {
+  flex: none;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  padding: 5px 10px !important;
+  font-size: 12.5px !important;
+  color: var(--text-dim) !important;
+}
+.sync-signout:hover { color: var(--text) !important; border-color: var(--volt) !important; background: transparent !important; }
 
 /* ============================ İSTATİSTİK ŞERİDİ ============================ */
 .stats-strip {

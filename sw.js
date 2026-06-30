@@ -5,7 +5,7 @@
    - Çapraz köken (yazı tipleri): bayatla-ve-yenile
    Sürüm yükseltmek için CACHE adını değiştir (örn. v3).
    ============================================================ */
-const CACHE = "arnould-v7";
+const CACHE = "arnould-v8";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const ASSETS = [
   "./js/timer.js",
   "./js/ui.js",
   "./js/app.js",
+  "./js/sync.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -55,19 +56,26 @@ self.addEventListener("fetch", (e) => {
           )
         )
     );
-  } else {
-    // Çapraz köken (Google Fonts vb.): bayatla-ve-yenile
-    e.respondWith(
-      caches.match(req).then((hit) => {
-        const fetchPromise = fetch(req)
-          .then((net) => {
-            const copy = net.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-            return net;
-          })
-          .catch(() => hit);
-        return hit || fetchPromise;
-      })
-    );
+    return;
   }
+
+  // Çapraz köken: YALNIZCA statik varlıkları önbellekle (Google Fonts + gstatic/
+  // Firebase SDK). Firebase API çağrılarını (firestore/auth) ASLA önbellekleme —
+  // bunlar canlı/akış istekleridir; SW'ye hiç dokundurmadan ağa bırak.
+  const cacheable = url.host === "fonts.googleapis.com" || url.host.endsWith(".gstatic.com");
+  if (!cacheable) return; // ağ passtrough (firestore.googleapis.com, identitytoolkit, firebaseapp.com vb.)
+
+  // bayatla-ve-yenile
+  e.respondWith(
+    caches.match(req).then((hit) => {
+      const fetchPromise = fetch(req)
+        .then((net) => {
+          const copy = net.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+          return net;
+        })
+        .catch(() => hit);
+      return hit || fetchPromise;
+    })
+  );
 });

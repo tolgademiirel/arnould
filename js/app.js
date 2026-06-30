@@ -72,7 +72,7 @@
       added++;
     }
     state.settings.seeded = true;
-    Store.save();
+    Store.save(true); // sessiz: örnek veri, buluttaki gerçek veriyi ezmesin (updatedAt=0 kalır)
     return added;
   }
 
@@ -278,6 +278,14 @@
   function handleMenu(action) {
     document.getElementById("menuPop").hidden = true;
     document.getElementById("menuBtn").setAttribute("aria-expanded", "false");
+    if (action === "signin") {
+      if (App.Sync) App.Sync.signIn(); else UI.toast("Senkron yüklenemedi");
+      return;
+    }
+    if (action === "signout") {
+      if (App.Sync) App.Sync.signOut();
+      return;
+    }
     if (action === "export") {
       var d = new Date();
       var name = "arnould-antrenman-" + d.getFullYear() + "-" + Store.pad(d.getMonth() + 1) + "-" + Store.pad(d.getDate()) + ".json";
@@ -531,6 +539,18 @@
     activeDate = null;
     refresh();
   }
+
+  // Bulut senkronu uzaktan yeni veri benimsediğinde her şeyi yeniden çiz.
+  // sync.js bunu App.onRemoteData üzerinden çağırır.
+  App.onRemoteData = function () {
+    applyTheme();
+    view = Store.getSettings().view || "month";
+    refresh();
+    if (activeDate && !document.getElementById("dayOverlay").hidden) {
+      UI.fillDayModal(activeDate);
+      updateDayActions();
+    }
+  };
 
   /* ---------- Başlat ---------- */
   function init() {

@@ -28,10 +28,13 @@
       workouts: {}, // "YYYY-MM-DD" -> { title, completed, exercises:[], auto?, autoVersion? }
       schedule: null,   // tekrarlayan haftalık program: { weekly:{0..6:program|null}, updatedAt }
       clipboard: null,  // kopyala-yapıştır panosu: { type:"day"|"week", payload }
+      updatedAt: 0,     // son gerçek değişiklik zamanı (bulut senkronu uzlaşması için)
     };
   }
 
   var state = defaultState();
+  var saveHook = null; // sync.js kaydolur: her gerçek değişiklikte buluta iter
+  function setSaveHook(fn) { saveHook = fn; }
 
   /* ---------- Yükle / Kaydet ---------- */
   function load() {
@@ -56,13 +59,37 @@
     return state;
   }
 
-  function save() {
+  // save(): gerçek kullanıcı değişikliği — updatedAt'i ilerlet ve buluta it.
+  // save(true): sessiz — seed/materyalizasyon/uzaktan benimseme; damga ve push yok.
+  function save(silent) {
+    if (!silent) state.updatedAt = Date.now();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
       console.error("ARNOULD: kaydedilemedi.", e);
       if (App.UI && App.UI.toast) App.UI.toast("Kaydedilemedi — tarayıcı deposu dolu olabilir.");
     }
+    if (!silent && saveHook) { try { saveHook(); } catch (e) {} }
+  }
+
+  // Buluttan gelen durumu benimse: yereli değiştir, sessizce kaydet (push yok).
+  function applyRemote(obj) {
+    if (!obj || typeof obj !== "object") return;
+    var clean = defaultState();
+    if (obj.settings && typeof obj.settings === "object") {
+      clean.settings.theme = obj.settings.theme === "light" ? "light" : "dark";
+      clean.settings.view = obj.settings.view === "week" ? "week" : "month";
+      clean.settings.seeded = !!obj.settings.seeded;
+    }
+    if (obj.workouts && typeof obj.workouts === "object" && !Array.isArray(obj.workouts)) {
+      clean.workouts = obj.workouts;
+    }
+    clean.schedule = sanitizeSchedule(obj.schedule);
+    clean.clipboard = sanitizeClipboard(obj.clipboard);
+    clean.updatedAt = Number(obj.updatedAt) || 0;
+    clean.__seq = Number(obj.__seq) || 0;
+    state = clean;
+    save(true); // sessiz: damga ilerletme ve push yok
   }
 
   /* ---------- Tarih yardımcıları ---------- */
@@ -292,7 +319,7 @@
         changed++;
       }
     }
-    if (changed) save();
+    if (changed) save(true); // sessiz: türetilen günler buluta itilmez (her cihaz kendi türetir)
     return changed;
   }
 
@@ -415,5 +442,7 @@
     getSettings: getSettings,
     setSetting: setSetting,
     getState: getState,
+    setSaveHook: setSaveHook,
+    applyRemote: applyRemote,
   };
 })();
