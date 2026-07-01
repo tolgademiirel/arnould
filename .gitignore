@@ -8,3 +8,6 @@ Thumbs.db
 
 # Bağımlılıklar (gerekirse)
 node_modules/
+
+# Firebase
+.firebase/
