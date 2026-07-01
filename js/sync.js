@@ -1,17 +1,18 @@
 /* ============================================================
    sync.js — Firebase ile cihazlar arası bulut senkronu
-   - Giriş: POPUPSUZ, tam-sayfa Google yönlendirmesi (OIDC implicit).
-     Google'a gidilir, ID token URL fragment'ında (#id_token=...) geri döner,
-     signInWithCredential ile Firebase oturumu açılır. Safari/iPhone dahil
-     her tarayıcıda çalışır (popup/üçüncü-taraf çerez gerektirmez).
+   - GİRİŞ: Firebase native signInWithRedirect. Uygulama Firebase
+     Hosting'ten (arnouldweb.web.app) sunulduğu için app origin === authDomain
+     → çapraz-alan/ITP sorunu YOK; iOS Safari VE kurulu (standalone) PWA'da
+     çalışır. Firebase bekleyen redirect'i IndexedDB'de saklar; standalone
+     aynı origin'de bu depoyu paylaştığı için token geri döner.
    - Tüm durum tek kullanıcı belgesinde (users/{uid}) JSON blob.
-   - localStorage daima yerel gerçektir; bulutla updatedAt'e göre uzlaşır
-     (en son değişiklik kazanır).
+   - localStorage daima yerel gerçektir; updatedAt ile last-write-wins uzlaşır.
    ES modülüdür: klasik scriptlerden (window.App) SONRA çalışır.
    ============================================================ */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
+  signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot
@@ -19,6 +20,10 @@ import {
 
 const firebaseConfig = {
   apiKey: "AIzaSyAwfh5XNo2rvn3ZMMyk_lDdNq-cugVbeFc",
+  // authDomain = uygulamanın sunulduğu origin (Firebase Hosting) → same-origin auth.
+  // firebaseapp.com kullanıyoruz çünkü /__/auth/handler redirect URI'si OAuth
+  // client'ta zaten kayıtlı (web.app için ek kayıt gerekirdi). Kullanıcı da bu
+  // adresten (arnouldweb.firebaseapp.com) açmalı → app origin === authDomain.
   authDomain: "arnouldweb.firebaseapp.com",
   projectId: "arnouldweb",
   storageBucket: "arnouldweb.firebasestorage.app",
@@ -26,13 +31,11 @@ const firebaseConfig = {
   appId: "1:889161863929:web:cb3f4b52ae6c78f0078828",
 };
 
-// OAuth Web Client ID (Google Cloud → arnouldweb → Credentials)
-const OAUTH_CLIENT_ID = "889161863929-9h87mdfeuh11taaju5okeblei7cda513.apps.googleusercontent.com";
-const NONCE_KEY = "arnould_oauth_nonce";
-
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: "select_account" });
 
 const App = (window.App = window.App || {});
 const Store = App.Store;
@@ -45,70 +48,24 @@ let onRemote = function () {};
 
 function toast(msg) { if (App.UI && App.UI.toast) App.UI.toast(msg); }
 
-/* ---------- Giriş (popupsuz, tam-sayfa yönlendirme) ---------- */
-function randNonce() {
-  var a = new Uint8Array(16);
-  (window.crypto || window.msCrypto).getRandomValues(a);
-  return Array.prototype.map.call(a, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
-}
-// Geri dönüş adresi (Google'da "Authorized redirect URIs"e bu eklenmiş olmalı).
-// index.html ile / sonu aynı yere normalize edilir.
-function redirectUri() {
-  return location.origin + location.pathname.replace(/index\.html$/, "");
-}
-function buildAuthUrl(nonce) {
-  var p = new URLSearchParams({
-    client_id: OAUTH_CLIENT_ID,
-    redirect_uri: redirectUri(),
-    response_type: "id_token",
-    scope: "openid email profile",
-    nonce: nonce,
-    prompt: "select_account",
-  });
-  return "https://accounts.google.com/o/oauth2/v2/auth?" + p.toString();
-}
-function signIn() {
-  var nonce = randNonce();
-  // localStorage (sessionStorage değil): standalone PWA ↔ Safari sıçramasında korunur
-  try { localStorage.setItem(NONCE_KEY, nonce); } catch (e) {}
-  location.href = buildAuthUrl(nonce);
+/* ---------- Giriş / çıkış (tam-sayfa yönlendirme, same-origin) ---------- */
+async function signIn() {
+  try {
+    await signInWithRedirect(auth, provider);
+  } catch (e) {
+    console.error("Giriş hatası:", e && e.code, e);
+    toast("Giriş yapılamadı: " + ((e && e.code) || "bilinmeyen hata"));
+  }
 }
 async function doSignOut() {
   try { await signOut(auth); toast("Çıkış yapıldı"); } catch (e) { console.warn(e); }
 }
 
-// Google'dan dönüşte URL fragment'ındaki id_token'ı işle
-function handleOAuthRedirect() {
-  if (!location.hash || location.hash.indexOf("id_token=") === -1) {
-    // Hata da fragment veya query'de gelebilir
-    if (location.hash.indexOf("error=") !== -1) {
-      var ep = new URLSearchParams(location.hash.substring(1));
-      toast("Giriş yapılamadı: " + (ep.get("error") || "hata"));
-      try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
-    }
-    return;
-  }
-  var hp = new URLSearchParams(location.hash.substring(1));
-  var idToken = hp.get("id_token");
-  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {} // token'ı URL'den temizle
-  if (!idToken) return;
-  // nonce doğrula (replay koruması)
-  try {
-    var payload = JSON.parse(decodeURIComponent(escape(atob(
-      idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")
-    ))));
-    var expected = localStorage.getItem(NONCE_KEY);
-    try { localStorage.removeItem(NONCE_KEY); } catch (e2) {}
-    if (expected && payload.nonce && payload.nonce !== expected) {
-      console.warn("nonce uyuşmadı"); return;
-    }
-  } catch (e) { /* çözümlenemezse yine de devam et */ }
-  var cred = GoogleAuthProvider.credential(idToken);
-  signInWithCredential(auth, cred).catch(function (e) {
-    console.error("Giriş hatası:", e && e.code, e);
-    toast("Giriş yapılamadı: " + ((e && e.code) || "bilinmeyen hata"));
-  });
-}
+// Sayfa açılışında yönlendirme dönüşünü tamamla (hata olursa kodu göster)
+getRedirectResult(auth).catch(function (e) {
+  console.error("Yönlendirme dönüş hatası:", e && e.code, e);
+  if (e && e.code) toast("Giriş yapılamadı: " + e.code);
+});
 
 /* ---------- Buluta yazma (debounce) ---------- */
 function schedulePush() {
@@ -189,9 +146,6 @@ onAuthStateChanged(auth, async function (user) {
     userDocRef = null;
   }
 });
-
-// Sayfa açılışında Google dönüşünü işle
-handleOAuthRedirect();
 
 /* ---------- Dışa aç ---------- */
 App.Sync = {

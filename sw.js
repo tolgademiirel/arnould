@@ -9,7 +9,7 @@
      devreye girer; sayfa tarafı controllerchange'de bir kez yeniden yüklenir.
    Sürüm yükseltmek için CACHE adını değiştir.
    ============================================================ */
-const CACHE = "arnould-v13";
+const CACHE = "arnould-v15";
 const ASSETS = [
   "./",
   "./index.html",
